@@ -598,6 +598,16 @@ function saveMatkul() {
 function renderMatkulList() {
     const list = document.getElementById('matkul-list'); if(!list) return; list.innerHTML = ''; let savedMatkul = JSON.parse(localStorage.getItem('nalaMatkul')) || [];
     if(savedMatkul.length === 0) { list.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Belum ada jadwal kuliah.</p>'; return; }
+    
+    // --- PENGURUTAN MATKUL BERDASARKAN HARI & JAM ---
+    const dayOrder = { 'Senin': 1, 'Selasa': 2, 'Rabu': 3, 'Kamis': 4, 'Jumat': 5, 'Sabtu': 6, 'Minggu': 7 };
+    savedMatkul.sort((a, b) => {
+        if (dayOrder[a.hari] !== dayOrder[b.hari]) {
+            return dayOrder[a.hari] - dayOrder[b.hari];
+        }
+        return a.jamMulai.localeCompare(b.jamMulai);
+    });
+    
     savedMatkul.forEach(m => { 
         list.innerHTML += `
             <div class="card" onclick="toggleDetail(this)">
@@ -644,33 +654,4 @@ document.addEventListener("DOMContentLoaded", () => {
             e.stopPropagation(); updateSwatchSelection(this.dataset.color); 
         }); 
     });
-
-    // --- LOGIKA ANIMASI INTRO ANTI-STUCK ---
-    const introScreen = document.getElementById('intro-screen');
-    if (introScreen) {
-        if (!sessionStorage.getItem('introPlayed')) {
-            const introVid = document.getElementById('intro-video');
-            let isHidden = false; // Flag anti-stuck
-            
-            const hideIntro = () => { 
-                if (isHidden) return; // Jangan jalankan 2 kali
-                isHidden = true;
-                introScreen.classList.add('intro-hidden'); 
-                sessionStorage.setItem('introPlayed', 'true'); 
-                setTimeout(() => { introScreen.style.display = 'none'; }, 500);
-            };
-            
-            if (introVid) {
-                introVid.onended = hideIntro;
-                introVid.onerror = hideIntro; // Sembunyikan kalau video error/tidak ketemu
-            }
-            
-            // SISTEM KEAMANAN (ANTI-STUCK): Apapun yang terjadi pada video, intro WAJIB hilang setelah 2.5 detik
-            setTimeout(hideIntro, 2500); 
-            
-        } else {
-            // Jika sudah pernah diputar, sembunyikan secara instan
-            introScreen.style.display = 'none';
-        }
-    }
 });
