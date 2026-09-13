@@ -730,6 +730,20 @@ document.addEventListener("DOMContentLoaded", () => {
         }); 
     });
 
+    // --- FITUR TUTUP MODAL DENGAN KLIK DI LUAR ---
+    window.addEventListener('click', function(e) {
+        // Daftar ID modal yang diizinkan untuk ditutup dengan klik luar
+        const dismissibleModals = ['day-detail-modal']; 
+        
+        dismissibleModals.forEach(modalId => {
+            const overlay = document.getElementById(modalId);
+            if (overlay && e.target === overlay) {
+                // Jika elemen yang diklik adalah background gelap (overlay), BUKAN kotak putih di dalamnya
+                closeModal(modalId);
+            }
+        });
+    });
+
     // --- LOGIKA ANIMASI INTRO ANTI-STUCK (AMAN) ---
     const introScreen = document.getElementById('intro-screen');
     if (introScreen) {
