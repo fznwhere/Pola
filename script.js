@@ -599,11 +599,13 @@ function renderMatkulList() {
     const list = document.getElementById('matkul-list'); if(!list) return; list.innerHTML = ''; let savedMatkul = JSON.parse(localStorage.getItem('nalaMatkul')) || [];
     if(savedMatkul.length === 0) { list.innerHTML = '<p style="text-align:center; color:var(--text-muted);">Belum ada jadwal kuliah.</p>'; return; }
     
-    // --- PENGURUTAN MATKUL BERDASARKAN HARI & JAM ---
-    const dayOrder = { 'Senin': 1, 'Selasa': 2, 'Rabu': 3, 'Kamis': 4, 'Jumat': 5, 'Sabtu': 6, 'Minggu': 7 };
+    // --- PENGURUTAN MATKUL BERDASARKAN HARI & JAM YANG 100% AKURAT ---
+    const namaHariUrut = ['Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'];
     savedMatkul.sort((a, b) => {
-        if (dayOrder[a.hari] !== dayOrder[b.hari]) {
-            return dayOrder[a.hari] - dayOrder[b.hari];
+        let indexA = namaHariUrut.indexOf(a.hari);
+        let indexB = namaHariUrut.indexOf(b.hari);
+        if (indexA !== indexB) {
+            return indexA - indexB;
         }
         return a.jamMulai.localeCompare(b.jamMulai);
     });
@@ -654,4 +656,32 @@ document.addEventListener("DOMContentLoaded", () => {
             e.stopPropagation(); updateSwatchSelection(this.dataset.color); 
         }); 
     });
+
+    // --- LOGIKA ANIMASI INTRO ANTI-STUCK (AMAN) ---
+    const introScreen = document.getElementById('intro-screen');
+    if (introScreen) {
+        if (!sessionStorage.getItem('introPlayed')) {
+            const introVid = document.getElementById('intro-video');
+            let isHidden = false; 
+            
+            const hideIntro = () => { 
+                if (isHidden) return; 
+                isHidden = true;
+                introScreen.classList.add('intro-hidden'); 
+                sessionStorage.setItem('introPlayed', 'true'); 
+                setTimeout(() => { introScreen.style.display = 'none'; }, 500);
+            };
+            
+            if (introVid) {
+                introVid.onended = hideIntro;
+                introVid.onerror = hideIntro; 
+            }
+            
+            // Jaminan aplikasi jalan dalam 2 detik
+            setTimeout(hideIntro, 2000); 
+            
+        } else {
+            introScreen.style.display = 'none';
+        }
+    }
 });
