@@ -39,6 +39,15 @@ function isUserHoliday(dateStr) {
     return null;
 }
 
+// LOGIKA RENTANG TANGGAL UNTUK ACARA
+function isDateInAcaraRange(dateStr, acara) {
+    if (!acara.endDate || acara.date === acara.endDate) return dateStr === acara.date;
+    let tDate = new Date(dateStr); tDate.setHours(0,0,0,0);
+    let sDate = new Date(acara.date); sDate.setHours(0,0,0,0);
+    let eDate = new Date(acara.endDate); eDate.setHours(0,0,0,0);
+    return (tDate >= sDate && tDate <= eDate);
+}
+
 function updateSwatchSelection(colorVal) {
     if(!document.getElementById('new-task-color')) return;
     document.getElementById('new-task-color').value = colorVal;
@@ -101,10 +110,15 @@ async function loadTodaySchedule() {
         combinedSchedule.push({ type: 'kuliah', id: m.id, name: `${m.name}`, badge: 'Kuliah', time: m.isOverride ? m.newTime : m.jamMulai, endTime: eTime, color: 'var(--color-kuliah)', ruang: m.isOverride ? m.newRuangan : m.ruangan, dosen: m.isOverride ? m.newDosen : m.dosen });
     });
 
-    savedTasks.filter(t => t.date === todayStr).forEach(t => {
-        let tCat = t.category.toLowerCase().includes('tugas') ? 'Tugas' : 'Acara';
-        combinedSchedule.push({ type: tCat.toLowerCase(), id: t.id, name: t.name, badge: tCat, time: t.time, endTime: '', color: t.color || 'var(--color-acara)', desc: t.deskripsi || 'Tidak ada catatan.', via: t.pengumpulan, cat: t.category, status: t.status });
+    // Perubahan logika untuk Acara agar mengecek rentang hari
+    savedTasks.forEach(t => {
+        let isToday = (t.category === 'Acara') ? isDateInAcaraRange(todayStr, t) : (t.date === todayStr);
+        if(isToday) {
+            let tCat = t.category.toLowerCase().includes('tugas') ? 'Tugas' : 'Acara';
+            combinedSchedule.push({ type: tCat.toLowerCase(), id: t.id, name: t.name, badge: tCat, time: t.time, endTime: t.endTime || '', color: t.color || 'var(--color-acara)', desc: t.deskripsi || 'Tidak ada catatan.', via: t.pengumpulan, ruang: t.ruang || '', cat: t.category, status: t.status });
+        }
     });
+
     savedRoutines.filter(r => r.days.includes(todayDayName)).forEach(r => {
         combinedSchedule.push({ type: 'rutin', id: r.id, name: r.name, badge: 'Rutinitas', time: r.time, endTime: '', color: r.color || 'var(--color-rutin)', desc: r.desc || 'Jadwal Rutinitas Mingguan' });
     });
@@ -129,7 +143,12 @@ async function loadTodaySchedule() {
         if(item.type === 'kuliah') { 
             detailHtml = `<div class="detail-grid"><div class="detail-item">${iRom} <div><span>Ruangan</span>${item.ruang}</div></div><div class="detail-item">${iUsr} <div><span>Dosen</span>${item.dosen}</div></div></div>`; 
         } else if(item.type === 'tugas' || item.type === 'acara') { 
-            detailHtml = `<p style="line-height:1.5;">${item.desc}</p> ${item.via ? `<div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-line);"><span>Via/Kumpul:</span> <strong>${item.via}</strong></div>` : ''} 
+            let extraInfo = '';
+            if(item.via) extraInfo += `<span>Via/Kumpul:</span> <strong>${item.via}</strong><br>`;
+            // Tampilkan tempat/ruangan untuk Acara
+            if(item.ruang) extraInfo += `<span>Tempat:</span> <strong>${item.ruang}</strong><br>`;
+            
+            detailHtml = `<p style="line-height:1.5;">${item.desc}</p> ${extraInfo ? `<div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-line);">${extraInfo}</div>` : ''} 
             <div class="card-actions three-btns">
                 <button class="icon-btn delete" onclick="event.stopPropagation(); deleteTask(${item.id})">${iDel} Hapus</button>
                 <div><button class="icon-btn" onclick="event.stopPropagation(); openEditTask(${item.id}, '${item.cat}')">${iEdt} Edit</button></div>
@@ -206,7 +225,10 @@ function renderMonthCalendar() {
         let movedIn = overrides.filter(o => o.newDate === currentLoopDate);
         if(matkulsToday.length > 0 || movedIn.length > 0) dayColors.push('var(--color-kuliah)');
         
-        savedTasks.filter(t => t.date === currentLoopDate && t.status !== 'done').forEach(t => dayColors.push(t.color || 'var(--color-tugas)'));
+        savedTasks.forEach(t => {
+            let isActive = (t.category === 'Acara') ? isDateInAcaraRange(currentLoopDate, t) : (t.date === currentLoopDate);
+            if(isActive && t.status !== 'done') dayColors.push(t.color || 'var(--color-tugas)');
+        });
         
         let uColors = [...new Set(dayColors)]; let pillStyle = '';
         if (uColors.length === 1) pillStyle = `background: ${uColors[0]};`;
@@ -279,6 +301,7 @@ function renderHistory(tabName) {
         let allDataHtml = '';
         
         tasks.filter(t => t.category === 'Acara').sort((a,b) => b.date.localeCompare(a.date)).forEach(t => {
+            let dateText = t.endDate && t.endDate !== t.date ? `${formatShortDate(t.date)} s/d ${formatShortDate(t.endDate)}` : formatShortDate(t.date);
             allDataHtml += `
                 <div class="card history-card" onclick="toggleDetail(this)">
                     <div class="card-header" style="background-color: ${t.color || 'var(--color-acara)'}; opacity:0.9;">
@@ -286,7 +309,7 @@ function renderHistory(tabName) {
                             <div class="card-title-group">
                                 <div>
                                     <h3 style="color:#FFFFFF;">${t.name}</h3>
-                                    <small style="color:var(--state-dimmed);">${iDat} ${formatShortDate(t.date)} &nbsp; ${iClk} ${t.time}</small>
+                                    <small style="color:var(--state-dimmed);">${iDat} ${dateText} &nbsp; ${iClk} ${t.time} ${t.endTime ? '- '+t.endTime : ''}</small>
                                 </div>
                             </div>
                             <span class="tag-pill">Acara</span>
@@ -294,6 +317,7 @@ function renderHistory(tabName) {
                     </div>
                     <div class="card-detail">
                         <p>${t.deskripsi || 'Tidak ada deskripsi'}</p>
+                        ${t.ruang ? `<div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-line); font-size:13px;"><span>Tempat:</span> <strong>${t.ruang}</strong></div>` : ''}
                         <div class="card-actions three-btns">
                             <button class="icon-btn delete" onclick="event.stopPropagation(); deleteTask(${t.id})">${iDel} Hapus</button>
                             <div><button class="icon-btn" onclick="event.stopPropagation(); openEditTask(${t.id}, '${t.category}')">${iEdt} Edit</button></div>
@@ -410,9 +434,12 @@ function showDayDetails(dateStr, dayName) {
         popUpItems.push({ type: 'kuliah', id: m.id, name: m.name, badge: 'Kuliah', time: time, endTime: end, color: 'var(--color-kuliah)', ruang: ruang, dosen: dosen, origDate: origDate });
     });
 
-    savedTasks.filter(t => t.date === dateStr).forEach(t => {
-        let tCat = t.category.toLowerCase().includes('tugas') ? 'Tugas' : 'Acara';
-        popUpItems.push({ type: 'tugasAcara', id: t.id, name: t.name, badge: tCat, time: t.time, endTime: '', color: t.color || 'var(--color-tugas)', desc: t.deskripsi, via: t.pengumpulan });
+    savedTasks.forEach(t => {
+        let isToday = (t.category === 'Acara') ? isDateInAcaraRange(dateStr, t) : (t.date === dateStr);
+        if(isToday) {
+            let tCat = t.category.toLowerCase().includes('tugas') ? 'Tugas' : 'Acara';
+            popUpItems.push({ type: 'tugasAcara', id: t.id, name: t.name, badge: tCat, time: t.time, endTime: t.endTime || '', color: t.color || 'var(--color-tugas)', desc: t.deskripsi, via: t.pengumpulan, ruang: t.ruang || '' });
+        }
     });
 
     popUpItems.sort((a, b) => a.time.localeCompare(b.time));
@@ -425,7 +452,11 @@ function showDayDetails(dateStr, dayName) {
                 <div class="detail-grid"><div class="detail-item">${iRom} <div><span>Ruangan</span>${item.ruang}</div></div><div class="detail-item">${iUsr} <div><span>Dosen</span>${item.dosen}</div></div></div>
                 <div class="card-actions"><button class="icon-btn" onclick="event.stopPropagation(); openRescheduleModal(${item.id}, '${item.origDate}', '${dateStr}')">${iEdt} Pindah Jadwal</button></div>`;
         } else if (item.type === 'tugasAcara') {
-            detailHtml = `<p style="line-height:1.5;">${item.desc || 'Tidak ada deskripsi'}</p>${item.via ? `<div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-line);"><span>Via/Kumpul:</span> <strong>${item.via}</strong></div>` : ''}`;
+            let extraInfo = '';
+            if(item.via) extraInfo += `<span>Via/Kumpul:</span> <strong>${item.via}</strong><br>`;
+            if(item.ruang) extraInfo += `<span>Tempat:</span> <strong>${item.ruang}</strong><br>`;
+            
+            detailHtml = `<p style="line-height:1.5;">${item.desc || 'Tidak ada deskripsi'}</p>${extraInfo ? `<div style="margin-top:12px; padding-top:12px; border-top:1px dashed var(--border-line);">${extraInfo}</div>` : ''}`;
         }
 
         listHtml += `
@@ -476,15 +507,31 @@ function openModal(category) {
     document.getElementById('field-nama-kegiatan').style.display = (category === 'Kuliah') ? 'none' : 'block';
     if(document.getElementById('field-matkul-dropdown')) document.getElementById('field-matkul-dropdown').style.display = (category === 'Tugas Kuliah' || category === 'Kuliah') ? 'block' : 'none';
     if(document.getElementById('field-pengumpulan')) document.getElementById('field-pengumpulan').style.display = (category === 'Tugas Kuliah') ? 'block' : 'none';
-    if(document.getElementById('field-ruangan')) document.getElementById('field-ruangan').style.display = (category === 'Kuliah') ? 'block' : 'none';
+    
+    // Tampilkan kolom Ruangan untuk Kuliah DAN Acara
+    if(document.getElementById('field-ruangan')) {
+        document.getElementById('field-ruangan').style.display = (category === 'Kuliah' || category === 'Acara') ? 'block' : 'none';
+        // Sesuaikan label berdasarkan kategori
+        let labelRuang = document.getElementById('field-ruangan').querySelector('label');
+        if(labelRuang) labelRuang.innerText = (category === 'Acara') ? 'Ruangan/Tempat (Opsional)' : 'Ruangan';
+    }
     
     if(document.getElementById('field-rutinitas-hari')) document.getElementById('field-rutinitas-hari').style.display = (category === 'Rutinitas') ? 'block' : 'none';
     if(document.getElementById('field-warna')) { document.getElementById('field-warna').style.display = (category === 'Acara' || category === 'Rutinitas') ? 'block' : 'none'; }
     if(document.getElementById('field-tanggal')) document.getElementById('field-tanggal').style.display = (category === 'Rutinitas') ? 'none' : 'block';
-    if(document.getElementById('field-tanggal-selesai')) { document.getElementById('field-tanggal-selesai').style.display = (category === 'Libur') ? 'block' : 'none'; }
+    
+    // Tampilkan Tanggal Selesai untuk Libur DAN Acara
+    if(document.getElementById('field-tanggal-selesai')) { 
+        document.getElementById('field-tanggal-selesai').style.display = (category === 'Libur' || category === 'Acara') ? 'block' : 'none'; 
+    }
     
     if(document.getElementById('field-jam')) document.getElementById('field-jam').style.display = (category === 'Libur') ? 'none' : 'block';
-    if(document.getElementById('field-jam-selesai')) document.getElementById('field-jam-selesai').style.display = (category === 'Kuliah') ? 'block' : 'none';
+    
+    // Tampilkan Jam Selesai untuk Kuliah DAN Acara
+    if(document.getElementById('field-jam-selesai')) {
+        document.getElementById('field-jam-selesai').style.display = (category === 'Kuliah' || category === 'Acara') ? 'block' : 'none';
+    }
+    
     if(document.getElementById('field-desc')) document.getElementById('field-desc').style.display = (category === 'Libur' || category === 'Kuliah') ? 'none' : 'block';
     
     document.getElementById('current-category').value = category;
@@ -507,7 +554,14 @@ function openEditTask(id, category) {
     if(task) {
         document.getElementById('new-task-name').value = task.name; document.getElementById('new-task-date').value = task.date;
         document.getElementById('new-task-time').value = task.time; document.getElementById('new-task-desc').value = task.deskripsi || '';
-        if(category === 'Acara' && document.getElementById('new-task-color')) updateSwatchSelection(task.color);
+        
+        if(category === 'Acara') {
+            if(document.getElementById('new-task-date-end')) document.getElementById('new-task-date-end').value = task.endDate || '';
+            if(document.getElementById('new-task-time-end')) document.getElementById('new-task-time-end').value = task.endTime || '';
+            if(document.getElementById('new-task-ruang')) document.getElementById('new-task-ruang').value = task.ruang || '';
+            if(document.getElementById('new-task-color')) updateSwatchSelection(task.color);
+        }
+        
         if(category === 'Tugas Kuliah') { document.getElementById('task-matkul-select').value = task.matkulId; document.getElementById('task-via').value = task.pengumpulan; }
     }
 }
@@ -570,9 +624,28 @@ function saveNewTask() {
     else {
         const time = document.getElementById('new-task-time').value; const date = document.getElementById('new-task-date').value; 
         if(!name || !date || !time) return alert("Semua wajib diisi!"); 
+        
         let taskData = { id: editId ? editId : Date.now(), name: name, date: date, time: time, category: category, status: 'pending', deskripsi: document.getElementById('new-task-desc').value };
-        if(category === 'Tugas Kuliah') { taskData.color = 'var(--color-tugas)'; taskData.matkulId = document.getElementById('task-matkul-select').value; taskData.pengumpulan = document.getElementById('task-via').value; } 
-        else if (category === 'Acara') { taskData.color = document.getElementById('new-task-color') ? document.getElementById('new-task-color').value : 'var(--color-acara)'; } 
+        
+        if(category === 'Tugas Kuliah') { 
+            taskData.color = 'var(--color-tugas)'; 
+            taskData.matkulId = document.getElementById('task-matkul-select').value; 
+            taskData.pengumpulan = document.getElementById('task-via').value; 
+        } 
+        else if (category === 'Acara') { 
+            taskData.color = document.getElementById('new-task-color') ? document.getElementById('new-task-color').value : 'var(--color-acara)'; 
+            
+            // Simpan data tambahan untuk Acara
+            const tEndInput = document.getElementById('new-task-time-end');
+            if(tEndInput && tEndInput.value) taskData.endTime = tEndInput.value;
+            
+            const dEndInput = document.getElementById('new-task-date-end');
+            if(dEndInput && dEndInput.value) taskData.endDate = dEndInput.value;
+            else taskData.endDate = date; // Default ke tanggal mulai jika kosong
+            
+            const ruangInput = document.getElementById('new-task-ruang');
+            if(ruangInput && ruangInput.value) taskData.ruang = ruangInput.value;
+        } 
         else { taskData.color = 'var(--color-tugas)'; }
         
         let savedTasks = JSON.parse(localStorage.getItem('nalaTasks')) || [];
